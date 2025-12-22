@@ -3,7 +3,7 @@ services:
     name: kfc-backend
     env: node
     plan: starter
-    buildCommand: npm install --include=dev && npm run build && ls -la dist/
+    buildCommand: npm install --include=dev && rm -rf dist tsconfig.build.tsbuildinfo && npm run build && ls -la dist/
     startCommand: npm run start:prod
     envVars:
       - key: NODE_ENV

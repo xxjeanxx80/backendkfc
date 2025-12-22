@@ -20,7 +20,7 @@ async function bootstrap() {
   }
   
   // Hàm kiểm tra origin có được phép không (sử dụng function để kiểm tra động)
-  const originChecker = (origin: string | undefined): boolean => {
+  const originChecker = (origin: string | undefined): boolean | string => {
     // Cho phép requests không có origin (mobile apps, Postman, etc.)
     if (!origin) {
       return true;
@@ -28,29 +28,34 @@ async function bootstrap() {
     
     // Cho phép các origin trong danh sách
     if (allowedOrigins.includes(origin)) {
-      return true;
+      return origin;
     }
     
-    // Cho phép tất cả các subdomain của Vercel
+    // Cho phép tất cả các subdomain của Vercel (bao gồm cả preview deployments)
     if (origin.includes('.vercel.app')) {
-      return true;
+      console.log(`[CORS] Cho phép origin từ Vercel: ${origin}`);
+      return origin;
     }
     
     // Cho phép custom domain của Vercel (nếu có)
     if (origin.includes('vercel.app')) {
-      return true;
+      console.log(`[CORS] Cho phép origin từ Vercel: ${origin}`);
+      return origin;
     }
     
-    // Từ chối các origin khác
+    // Log origin bị từ chối để debug
+    console.warn(`[CORS] Từ chối origin: ${origin}`);
     return false;
   };
   
   app.enableCors({
     origin: originChecker,
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
     exposedHeaders: ['Content-Type', 'Authorization'],
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
   });
 
   app.useGlobalFilters(new AllExceptionsFilter());

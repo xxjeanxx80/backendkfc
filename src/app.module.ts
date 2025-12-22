@@ -67,6 +67,10 @@ import { SalesTransaction } from './sales/entities/sales-transaction.entity';
         logging: ['error', 'warn'], // Focus logs on errors/warnings
         retryAttempts: 5,
         retryDelay: 2000,
+        // SSL configuration for Railway MySQL
+        ssl: process.env.NODE_ENV === 'production' ? {
+          rejectUnauthorized: false, // Railway uses self-signed certificates
+        } : false,
       }),
       inject: [ConfigService],
     }),

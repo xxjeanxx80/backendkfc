@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: kfc-backend
+    env: node
+    plan: starter
+    buildCommand: npm install && npm run build
+    startCommand: npm run start:prod
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        sync: false  # Render tự động set PORT
+      - key: DB_HOST
+        sync: false  # Set trong Render Dashboard từ Railway
+      - key: DB_PORT
+        sync: false  # Set trong Render Dashboard từ Railway
+      - key: DB_USERNAME
+        sync: false  # Set trong Render Dashboard từ Railway
+      - key: DB_PASSWORD
+        sync: false  # Set trong Render Dashboard từ Railway
+      - key: DB_DATABASE
+        sync: false  # Set trong Render Dashboard từ Railway
+      - key: JWT_SECRET
+        sync: false  # Set trong Render Dashboard (generate random string)
+      - key: FRONTEND_URL
+        sync: false  # Set trong Render Dashboard (URL của frontend Vercel)
+

@@ -3,6 +3,7 @@ services:
     name: kfc-backend
     env: node
     plan: starter
+    rootDir: backend
     buildCommand: npm install --include=dev && npm run build
     startCommand: npm run start:prod
     envVars:

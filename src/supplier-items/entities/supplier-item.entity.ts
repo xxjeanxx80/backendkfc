@@ -7,7 +7,10 @@ import {
   DeleteDateColumn,
   Unique,
   Index,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+import { Item } from '../../items/entities/item.entity';
 
 @Entity('supplier_items')
 @Unique(['supplierId', 'itemId'])
@@ -23,6 +26,10 @@ export class SupplierItem {
   @Column()
   itemId: number;
 
+  @ManyToOne(() => Item)
+  @JoinColumn({ name: 'itemId' })
+  item: Item;
+
   @Column({ type: 'decimal', precision: 15, scale: 2 })
   unitPrice: number;
 
@@ -37,12 +44,6 @@ export class SupplierItem {
 
   @Column({ default: false })
   isPreferred: boolean;
-
-  @Column({ type: 'date', nullable: true })
-  effectiveFrom: Date | null;
-
-  @Column({ type: 'date', nullable: true })
-  effectiveTo: Date | null;
 
   @Column({ default: true })
   isActive: boolean;

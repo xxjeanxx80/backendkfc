@@ -7,6 +7,7 @@ import {
   Param,
   Query,
   UseGuards,
+  Request,
 } from '@nestjs/common';
 import { StockRequestsService } from './stock-requests.service';
 import { CreateStockRequestDto } from './dto/create-stock-request.dto';
@@ -41,12 +42,6 @@ export class StockRequestsController {
     return this.service.create(dto);
   }
 
-  @Post(':id/approve')
-  @Roles('PROCUREMENT_STAFF', 'ADMIN')
-  approve(@Param('id') id: string, @Body() body: { approverId: number }) {
-    return this.service.approve(+id, body.approverId);
-  }
-
   @Post('generate-po')
   @Roles('PROCUREMENT_STAFF', 'ADMIN')
   generatePOFromRequests(@Body() body: { requestIds: number[] }) {
@@ -75,5 +70,19 @@ export class StockRequestsController {
   @Roles('PROCUREMENT_STAFF', 'ADMIN')
   autoReplenishBelowSafetyStock(@Query('storeId') storeId?: string) {
     return this.service.autoReplenishBelowSafetyStock(storeId ? +storeId : undefined);
+  }
+
+  @Post('express-order')
+  @Roles('STORE_MANAGER', 'PROCUREMENT_STAFF', 'ADMIN')
+  expressOrder(
+    @Body() body: { itemId: number; storeId: number; requestedQty: number },
+    @Request() req: { user: { userId: number } },
+  ) {
+    return this.service.expressOrder(
+      body.itemId,
+      body.storeId,
+      body.requestedQty,
+      req.user?.userId,
+    );
   }
 }

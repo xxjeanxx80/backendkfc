@@ -218,7 +218,7 @@ export class ProcurementController {
   @Roles('ADMIN')
   async confirm(
     @Param('id') id: string,
-    @Body() body: { expectedDeliveryDate?: string; supplierNotes?: string },
+    @Body() body: { expectedDeliveryDate?: string },
     @Request() req: { user: { userId: number; role: string } },
   ) {
     try {
@@ -226,7 +226,6 @@ export class ProcurementController {
         +id,
         req.user.userId,
         body.expectedDeliveryDate,
-        body.supplierNotes,
       );
       return {
         success: true,

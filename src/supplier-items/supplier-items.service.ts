@@ -10,6 +10,14 @@ export class SupplierItemsService {
     private readonly supplierItemRepo: Repository<SupplierItem>,
   ) {}
 
+  async findBySupplierId(supplierId: number) {
+    return await this.supplierItemRepo.find({
+      where: { supplierId, isActive: true },
+      relations: ['item'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
   async findBestMappingForItem(
     itemId: number,
     at?: Date,
@@ -18,16 +26,9 @@ export class SupplierItemsService {
       where: { itemId, isActive: true },
     });
     if (mappings.length === 0) return null;
-    const now = at ?? new Date();
-    const valid = mappings.filter((m) => {
-      const fromOk = !m.effectiveFrom || m.effectiveFrom <= now;
-      const toOk = !m.effectiveTo || m.effectiveTo >= now;
-      return fromOk && toOk;
-    });
-    const pool = valid.length ? valid : mappings;
-    const preferred = pool.find((m) => m.isPreferred);
+    const preferred = mappings.find((m) => m.isPreferred);
     if (preferred) return preferred;
-    return pool.reduce((min, cur) =>
+    return mappings.reduce((min, cur) =>
       cur.unitPrice < min.unitPrice ? cur : min,
     );
   }

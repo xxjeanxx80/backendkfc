@@ -67,40 +67,70 @@ export class ReportsService {
       const grossProfit = totalRevenue - totalCost;
       const grossProfitMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
 
-      // Items below safety stock
+      // Low Stock and Full Stock Alerts based on min/max stock level
       const items = await this.itemRepository.find({ where: { isActive: true } });
-      const itemsBelowSafetyStock: Array<{
+      const lowStockAlerts: Array<{
         itemId: number;
         itemName: string;
         sku: string;
         currentStock: number;
-        safetyStock: number;
+        minStockLevel: number;
+        difference: number;
+      }> = [];
+      const fullStockAlerts: Array<{
+        itemId: number;
+        itemName: string;
+        sku: string;
+        currentStock: number;
+        maxStockLevel: number;
         difference: number;
       }> = [];
 
+      // Group batches by item SKU to calculate total quantity per item
+      const itemStockMap = new Map<number, number>();
+      batches.forEach((batch) => {
+        const current = itemStockMap.get(batch.itemId) || 0;
+        itemStockMap.set(batch.itemId, current + batch.quantityOnHand);
+      });
+
       for (const item of items) {
         try {
-          const safetyStock = await this.itemsService.calculateSafetyStock(item.id);
-          const currentStock = await this.itemsService.getCurrentStock(item.id);
-          
-          if (currentStock < safetyStock) {
-            itemsBelowSafetyStock.push({
+          const totalQuantity = itemStockMap.get(item.id) || 0;
+          const minStockLevel = item.minStockLevel || 10;
+          const maxStockLevel = item.maxStockLevel || 100;
+
+          // Check for low stock (below minStockLevel)
+          if (totalQuantity < minStockLevel) {
+            lowStockAlerts.push({
               itemId: item.id,
               itemName: item.itemName,
               sku: item.sku,
-              currentStock,
-              safetyStock: Number(safetyStock),
-              difference: safetyStock - currentStock,
+              currentStock: totalQuantity,
+              minStockLevel,
+              difference: minStockLevel - totalQuantity,
+            });
+          }
+
+          // Check for full stock (at or above maxStockLevel)
+          if (totalQuantity >= maxStockLevel) {
+            fullStockAlerts.push({
+              itemId: item.id,
+              itemName: item.itemName,
+              sku: item.sku,
+              currentStock: totalQuantity,
+              maxStockLevel,
+              difference: totalQuantity - maxStockLevel,
             });
           }
         } catch (error) {
           // Skip items with errors
-          this.logger.warn(`Failed to check safety stock for item ${item.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          this.logger.warn(`Failed to check stock levels for item ${item.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       }
 
       // Sort by difference (most critical first)
-      itemsBelowSafetyStock.sort((a, b) => b.difference - a.difference);
+      lowStockAlerts.sort((a, b) => b.difference - a.difference);
+      fullStockAlerts.sort((a, b) => b.difference - a.difference);
 
       return {
         totalInventoryValue: Number(totalInventoryValue.toFixed(2)),
@@ -114,8 +144,10 @@ export class ReportsService {
           margin: Number(grossProfitMargin.toFixed(2)),
           period: '30 days',
         },
-        itemsBelowSafetyStock: itemsBelowSafetyStock.slice(0, 10), // Top 10 most critical
-        itemsBelowSafetyStockCount: itemsBelowSafetyStock.length,
+        lowStockAlerts: lowStockAlerts.slice(0, 10), // Top 10 most critical
+        lowStockAlertsCount: lowStockAlerts.length,
+        fullStockAlerts: fullStockAlerts.slice(0, 10), // Top 10 most critical
+        fullStockAlertsCount: fullStockAlerts.length,
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';

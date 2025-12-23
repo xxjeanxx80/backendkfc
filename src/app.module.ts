@@ -19,6 +19,8 @@ import { SalesModule } from './sales/sales.module';
 import { ReportsModule } from './reports/reports.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { TasksModule } from './tasks/tasks.module';
+import { AdminModule } from './admin/admin.module';
+import { TemperatureModule } from './temperature/temperature.module';
 // Import all entities explicitly
 import { User } from './users/entities/user.entity';
 import { Role } from './roles/entities/role.entity';
@@ -32,6 +34,7 @@ import { GoodsReceipt, GoodsReceiptItem } from './goods-receipts/entities/goods-
 import { SupplierItem } from './supplier-items/entities/supplier-item.entity';
 import { StockRequest } from './stock-requests/entities/stock-request.entity';
 import { SalesTransaction } from './sales/entities/sales-transaction.entity';
+import { TemperatureLog } from './temperature/entities/temperature-log.entity';
 
 @Module({
   imports: [
@@ -42,11 +45,11 @@ import { SalesTransaction } from './sales/entities/sales-transaction.entity';
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
         type: 'mysql',
-        host: configService.get<string>('DB_HOST'),
-        port: configService.get<number>('DB_PORT'),
-        username: configService.get<string>('DB_USERNAME'),
-        password: configService.get<string>('DB_PASSWORD'),
-        database: configService.get<string>('DB_DATABASE'),
+        host: configService.get<string>('DB_HOST') || 'localhost',
+        port: configService.get<number>('DB_PORT') || 3306,
+        username: configService.get<string>('DB_USERNAME') || 'root',
+        password: configService.get<string>('DB_PASSWORD') || '',
+        database: configService.get<string>('DB_DATABASE') || 'kfc_scm',
         entities: [
           User,
           Role,
@@ -62,17 +65,12 @@ import { SalesTransaction } from './sales/entities/sales-transaction.entity';
           SupplierItem,
           StockRequest,
           SalesTransaction,
+          TemperatureLog,
         ],
-        synchronize: false, // Disabled to avoid FK/index conflicts
-        logging: ['error', 'warn'], // Focus logs on errors/warnings
-        retryAttempts: 5,
+        synchronize: false,
+        logging: ['error', 'warn'],
+        retryAttempts: 3,
         retryDelay: 2000,
-        // SSL configuration for Railway MySQL (only in production)
-        ...(configService.get<string>('NODE_ENV') === 'production' ? {
-          ssl: {
-            rejectUnauthorized: false, // Railway uses self-signed certificates
-          },
-        } : {}),
       }),
       inject: [ConfigService],
     }),
@@ -92,6 +90,8 @@ import { SalesTransaction } from './sales/entities/sales-transaction.entity';
     ReportsModule,
     NotificationsModule,
     TasksModule,
+    AdminModule,
+    TemperatureModule,
   ],
   controllers: [AppController],
   providers: [AppService],

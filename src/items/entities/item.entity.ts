@@ -32,11 +32,17 @@ export class Item {
   @Column({ default: 100 })
   maxStockLevel: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  @Column({ name: 'safestock', type: 'decimal', precision: 10, scale: 2, nullable: true })
   safetyStock: number;
 
-  @Column({ type: 'int', nullable: true })
-  leadTimeDays: number;
+  @Column({ type: 'enum', enum: ['cold', 'frozen'], default: 'cold' })
+  storageType: 'cold' | 'frozen';
+
+  @Column({ type: 'float', nullable: true })
+  minTemperature: number;
+
+  @Column({ type: 'float', nullable: true })
+  maxTemperature: number;
 
   @Column({ default: true })
   isActive: boolean;

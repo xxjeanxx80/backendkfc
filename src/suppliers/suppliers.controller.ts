@@ -21,6 +21,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { SupplierItemsService } from '../supplier-items/supplier-items.service';
 
 @ApiTags('suppliers')
 @ApiBearerAuth()
@@ -29,7 +30,10 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 export class SuppliersController {
   private readonly logger = new Logger(SuppliersController.name);
 
-  constructor(private readonly suppliersService: SuppliersService) {}
+  constructor(
+    private readonly suppliersService: SuppliersService,
+    private readonly supplierItemsService: SupplierItemsService,
+  ) {}
 
   @Post()
   @Roles('PROCUREMENT_STAFF', 'ADMIN')
@@ -124,5 +128,11 @@ export class SuppliersController {
   @Roles('PROCUREMENT_STAFF', 'ADMIN')
   remove(@Param('id') id: string) {
     return this.suppliersService.remove(+id);
+  }
+
+  @Get(':id/items')
+  @Roles('STORE_MANAGER', 'PROCUREMENT_STAFF', 'ADMIN')
+  getSupplierItems(@Param('id') id: string) {
+    return this.supplierItemsService.findBySupplierId(+id);
   }
 }

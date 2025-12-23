@@ -419,7 +419,7 @@ export class ProcurementService {
     }
   }
 
-  async confirm(id: number, confirmedBy: number, expectedDeliveryDate?: string, supplierNotes?: string) {
+  async confirm(id: number, confirmedBy: number, expectedDeliveryDate?: string) {
     this.logger.log(`Confirming purchase order ${id} by supplier`);
     try {
       const po = await this.purchaseOrderRepository.findOne({
@@ -441,9 +441,6 @@ export class ProcurementService {
       po.confirmedAt = new Date();
       if (expectedDeliveryDate) {
         po.expectedDeliveryDate = new Date(expectedDeliveryDate);
-      }
-      if (supplierNotes) {
-        po.supplierNotes = supplierNotes;
       }
 
       const result = await this.purchaseOrderRepository.save(po);

@@ -3,6 +3,8 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FindOptionsWhere, Repository, MoreThanOrEqual, In } from 'typeorm';
@@ -19,6 +21,7 @@ import { POStatus } from '../procurement/entities/procurement.entity';
 import { CreateProcurementDto } from '../procurement/dto/create-procurement.dto';
 import { ItemsService } from '../items/items.service';
 import { InventoryBatch } from '../inventory-batches/entities/inventory-batch.entity';
+import { PurchaseOrder } from '../procurement/entities/procurement.entity';
 
 @Injectable()
 export class StockRequestsService {
@@ -31,8 +34,11 @@ export class StockRequestsService {
     private readonly itemRepo: Repository<Item>,
     @InjectRepository(InventoryBatch)
     private readonly inventoryBatchRepository: Repository<InventoryBatch>,
+    @InjectRepository(PurchaseOrder)
+    private readonly purchaseOrderRepository: Repository<PurchaseOrder>,
     private readonly supplierItemsService: SupplierItemsService,
     private readonly procurementService: ProcurementService,
+    @Inject(forwardRef(() => ItemsService))
     private readonly itemsService: ItemsService,
   ) {}
 
@@ -77,23 +83,6 @@ export class StockRequestsService {
     return this.stockRequestRepo.save(entity);
   }
 
-  async approve(id: number, approverId: number) {
-    const req = await this.stockRequestRepo.findOne({ where: { id } });
-    if (!req) throw new BadRequestException('Stock request not found');
-    if (
-      req.status !== StockRequestStatus.REQUESTED &&
-      req.status !== StockRequestStatus.PENDING_APPROVAL
-    ) {
-      throw new BadRequestException(
-        'Only requested/pending_approval can be approved',
-      );
-    }
-    req.status = StockRequestStatus.APPROVED;
-    req.approvedBy = approverId;
-    req.approvedAt = new Date();
-    return this.stockRequestRepo.save(req);
-  }
-
   async update(id: number, data: { poId?: number; status?: StockRequestStatus }) {
     const req = await this.stockRequestRepo.findOne({ where: { id } });
     if (!req) throw new BadRequestException('Stock request not found');
@@ -102,6 +91,20 @@ export class StockRequestsService {
       req.poId = data.poId;
     }
     if (data.status !== undefined) {
+      // Chỉ cho phép chuyển từ REQUESTED sang CANCELLED hoặc PO_GENERATED
+      if (req.status !== StockRequestStatus.REQUESTED) {
+        throw new BadRequestException(
+          `Cannot change status. Current status: ${req.status}. Only REQUESTED status can be changed.`,
+        );
+      }
+      if (
+        data.status !== StockRequestStatus.CANCELLED &&
+        data.status !== StockRequestStatus.PO_GENERATED
+      ) {
+        throw new BadRequestException(
+          `Invalid status transition. Only CANCELLED or PO_GENERATED are allowed from REQUESTED status.`,
+        );
+      }
       req.status = data.status;
     }
     
@@ -226,7 +229,8 @@ export class StockRequestsService {
       const results: Array<{ poId: number; requestIds: number[] }> = [];
       for (const [key, group] of grouped) {
         const now = new Date();
-        const poNumber = `PO-${now.getTime()}-${group.storeId}-${group.supplierId}`;
+        // Generate PO number theo format PO-{số thứ tự}
+        const poNumber = await this.generatePONumber();
         const orderItems = group.items.map((i) => ({
           itemId: i.itemId,
           quantity: i.qty,
@@ -316,15 +320,15 @@ export class StockRequestsService {
           this.logger.warn(
             `No supplier mapping for item ${req.itemId}, skipping`,
           );
-          // Skip or mark rejected
-          req.status = StockRequestStatus.REJECTED;
+          // Skip or mark cancelled
+          req.status = StockRequestStatus.CANCELLED;
           await this.stockRequestRepo.save(req);
           continue;
         }
         const item = await this.itemRepo.findOne({ where: { id: req.itemId } });
         if (!item) {
           this.logger.warn(`Item ${req.itemId} not found, skipping`);
-          req.status = StockRequestStatus.REJECTED;
+          req.status = StockRequestStatus.CANCELLED;
           await this.stockRequestRepo.save(req);
           continue;
         }
@@ -353,7 +357,8 @@ export class StockRequestsService {
       for (const [key, group] of grouped) {
         // Build PO data
         const now = new Date();
-        const poNumber = `AUTOPO-${now.getTime()}-${group.storeId}-${group.supplierId}`;
+        // Generate PO number theo format PO-{số thứ tự}
+        const poNumber = await this.generatePONumber();
         const orderItems = group.items.map((i) => ({
           itemId: i.itemId,
           quantity: i.qty,
@@ -429,18 +434,24 @@ export class StockRequestsService {
 
       for (const item of items) {
         try {
-          // Calculate safety stock
-          const safetyStock = await this.itemsService.calculateSafetyStock(item.id, storeId);
+          // Get safety stock: use item.safetyStock if available, otherwise calculate
+          let safetyStock: number;
+          if (item.safetyStock && item.safetyStock > 0) {
+            safetyStock = Number(item.safetyStock);
+          } else {
+            safetyStock = await this.itemsService.calculateSafetyStock(item.id, storeId);
+          }
           
           // Get current stock
           const currentStock = await this.itemsService.getCurrentStock(item.id, storeId);
 
           // Check if below safety stock
           if (currentStock < safetyStock) {
-            const reorderQty = Math.max(safetyStock - currentStock, item.minStockLevel || 10);
+            // Requested Quantity = safetyStock + 20 (hardcoded)
+            const requestedQty = safetyStock + 20;
             
             this.logger.log(
-              `Item ${item.id} (${item.itemName}) below safety stock. Current: ${currentStock}, Safety: ${safetyStock}, Reorder: ${reorderQty}`
+              `Item ${item.id} (${item.itemName}) below safety stock. Current: ${currentStock}, Safety: ${safetyStock}, Requested: ${requestedQty}`
             );
 
             // Check if there's already a pending stock request for this item
@@ -457,8 +468,8 @@ export class StockRequestsService {
               const stockRequest = this.stockRequestRepo.create({
                 storeId: storeId || 1, // Default to store 1 if not specified
                 itemId: item.id,
-                requestedQty: reorderQty,
-                priority: StockRequestPriority.HIGH,
+                requestedQty: requestedQty,
+                priority: StockRequestPriority.MEDIUM,
                 status: StockRequestStatus.REQUESTED,
                 notes: `Auto-generated: Below safety stock (Current: ${currentStock}, Safety: ${safetyStock})`,
               });
@@ -498,6 +509,97 @@ export class StockRequestsService {
       throw new InternalServerErrorException('Failed to auto replenish', {
         cause: error,
       });
+    }
+  }
+
+  /**
+   * Express Order: Create Stock Request with HIGH priority, auto-generate PO, auto-approve, and auto-send
+   * This bypasses the normal approval workflow and goes directly to SENT status
+   */
+  async expressOrder(
+    itemId: number,
+    storeId: number,
+    requestedQty: number,
+    requestedBy?: number,
+  ) {
+    this.logger.log(`Creating express order for item ${itemId}, store ${storeId}, qty ${requestedQty}`);
+    
+    try {
+      // 1. Create Stock Request with priority = HIGH, status = REQUESTED
+      const stockRequest = this.stockRequestRepo.create({
+        storeId,
+        itemId,
+        requestedQty,
+        priority: StockRequestPriority.HIGH,
+        status: StockRequestStatus.REQUESTED,
+        requestedBy: requestedBy || null,
+        notes: 'Express Order - Auto-approved and sent',
+      });
+      const savedRequest = await this.stockRequestRepo.save(stockRequest);
+      this.logger.log(`Stock Request ${savedRequest.id} created for express order`);
+
+      // 2. Auto-generate PO from this stock request
+      const poResults = await this.generatePOFromRequests([savedRequest.id]);
+      if (!poResults || poResults.length === 0) {
+        throw new BadRequestException('Failed to generate PO from stock request');
+      }
+      
+      const poResult = poResults[0];
+      const poId = poResult.poId;
+      this.logger.log(`PO ${poId} generated from stock request ${savedRequest.id}`);
+
+      // 3. Get the PO and auto-approve it (using system user ID 0 or 1 as approver)
+      const po = await this.procurementService.findOne(poId);
+      if (po.status !== POStatus.PENDING_APPROVAL) {
+        this.logger.warn(`PO ${poId} status is ${po.status}, expected PENDING_APPROVAL`);
+      } else {
+        // Auto-approve PO (using system user ID 1 as approver)
+        await this.procurementService.approve(poId, 1);
+        this.logger.log(`PO ${poId} auto-approved`);
+      }
+
+      // 4. Auto-send PO (status = SENT)
+      const approvedPO = await this.procurementService.findOne(poId);
+      if (approvedPO.status === POStatus.APPROVED) {
+        await this.procurementService.send(poId);
+        this.logger.log(`PO ${poId} auto-sent`);
+      }
+
+      // 5. Update Stock Request status = PO_GENERATED
+      savedRequest.status = StockRequestStatus.PO_GENERATED;
+      savedRequest.poId = poId;
+      await this.stockRequestRepo.save(savedRequest);
+
+      // Return the final PO with SENT status
+      const finalPO = await this.procurementService.findOne(poId);
+      return finalPO;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      const stack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(`Failed to create express order: ${message}`, stack);
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to create express order', {
+        cause: error,
+      });
+    }
+  }
+
+  /**
+   * Generate PO number theo format PO-{số thứ tự}
+   * Tìm số thứ tự tiếp theo dựa vào số lượng PO hiện có
+   */
+  private async generatePONumber(): Promise<string> {
+    try {
+      // Đếm số lượng PO hiện có để tìm số thứ tự tiếp theo
+      const totalCount = await this.purchaseOrderRepository.count();
+      const nextNumber = totalCount + 1;
+      return `PO-${nextNumber}`;
+    } catch (error) {
+      this.logger.error(`Failed to generate PO number: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      // Fallback: dùng timestamp nếu có lỗi
+      return `PO-${Date.now()}`;
     }
   }
 }

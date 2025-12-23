@@ -7,20 +7,24 @@ import {
   Param,
   Delete,
   UseGuards,
+  Request,
+  Logger,
 } from '@nestjs/common';
 import { ItemsService } from './items.service';
 import { CreateItemDto } from './dto/create-item.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
-import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 @ApiTags('items')
 @ApiBearerAuth()
 @Controller('items')
-@UseGuards(AuthGuard('jwt'), RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class ItemsController {
+  private readonly logger = new Logger(ItemsController.name);
+
   constructor(private readonly itemsService: ItemsService) {}
 
   @Post()
@@ -36,12 +40,13 @@ export class ItemsController {
   }
 
   @Get(':id')
+  @Roles('ADMIN', 'STORE_MANAGER', 'PROCUREMENT_STAFF', 'INVENTORY_STAFF')
   findOne(@Param('id') id: string) {
     return this.itemsService.findOne(+id);
   }
 
   @Patch(':id')
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'STORE_MANAGER', 'INVENTORY_STAFF')
   update(@Param('id') id: string, @Body() updateItemDto: UpdateItemDto) {
     return this.itemsService.update(+id, updateItemDto);
   }

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { StockRequest } from './entities/stock-request.entity';
 import { StockRequestsService } from './stock-requests.service';
@@ -9,13 +9,14 @@ import { ItemsModule } from '../items/items.module';
 import { Item } from '../items/entities/item.entity';
 import { Store } from '../stores/entities/store.entity';
 import { InventoryBatch } from '../inventory-batches/entities/inventory-batch.entity';
+import { PurchaseOrder } from '../procurement/entities/procurement.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([StockRequest, Item, Store, InventoryBatch]),
+    TypeOrmModule.forFeature([StockRequest, Item, Store, InventoryBatch, PurchaseOrder]),
     SupplierItemsModule,
     ProcurementModule,
-    ItemsModule,
+    forwardRef(() => ItemsModule),
   ],
   controllers: [StockRequestsController],
   providers: [StockRequestsService],

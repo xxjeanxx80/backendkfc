@@ -36,11 +36,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     const mysqlErrno = this.extractErrno(cause);
     const mysqlSqlState = this.extractSqlState(cause);
-    const userId =
-      (request as Request & { user?: { id?: number } }).user?.id ?? null;
+    const reqUser = (request as Request & { user?: { id?: number; userId?: number; role?: string; username?: string } }).user;
+    const userId = reqUser?.id ?? reqUser?.userId ?? null;
+    const userRole = reqUser?.role ?? 'none';
+    const username = reqUser?.username ?? 'none';
+    const authHeader = request.headers?.authorization ? 'present' : 'missing';
 
     this.logger.error(
-      `[${request.method}] ${request.url} ${status} ${baseMessage} ${mysqlErrno ? `errno=${mysqlErrno}` : ''} ${mysqlSqlState ? `sqlState=${mysqlSqlState}` : ''} userId=${userId ?? 'anonymous'}`,
+      `[${request.method}] ${request.url} ${status} ${baseMessage} ${mysqlErrno ? `errno=${mysqlErrno}` : ''} ${mysqlSqlState ? `sqlState=${mysqlSqlState}` : ''} userId=${userId ?? 'anonymous'} role=${userRole} username=${username} authHeader=${authHeader}`,
       exception instanceof Error ? exception.stack : undefined,
     );
 

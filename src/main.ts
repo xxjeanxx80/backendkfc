@@ -2,74 +2,69 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { NestExpressApplication } from '@nestjs/platform-express';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  
-  // Cấu hình CORS - cho phép frontend URL từ biến môi trường và các origin từ Vercel
-  const frontendUrl = process.env.FRONTEND_URL;
-  const allowedOrigins = [
-    'http://localhost:5173',
-    'http://localhost:5174',
-    'http://localhost:3000',
-  ];
-  
-  // Thêm frontend URL từ biến môi trường nếu có
-  if (frontendUrl) {
-    allowedOrigins.push(frontendUrl);
-  }
-  
-  // Hàm kiểm tra origin có được phép không (sử dụng function để kiểm tra động)
-  const originChecker = (origin: string | undefined): boolean | string => {
-    // Cho phép requests không có origin (mobile apps, Postman, etc.)
-    if (!origin) {
-      return true;
-    }
+  try {
+    console.log('[Bootstrap] Đang khởi tạo NestJS application...');
+    const app = await NestFactory.create<NestExpressApplication>(AppModule);
+    console.log('[Bootstrap] NestJS application đã được tạo thành công');
     
-    // Cho phép các origin trong danh sách
-    if (allowedOrigins.includes(origin)) {
-      return origin;
-    }
-    
-    // Cho phép tất cả các subdomain của Vercel (bao gồm cả preview deployments)
-    if (origin.includes('.vercel.app')) {
-      console.log(`[CORS] Cho phép origin từ Vercel: ${origin}`);
-      return origin;
-    }
-    
-    // Cho phép custom domain của Vercel (nếu có)
-    if (origin.includes('vercel.app')) {
-      console.log(`[CORS] Cho phép origin từ Vercel: ${origin}`);
-      return origin;
-    }
-    
-    // Log origin bị từ chối để debug
-    console.warn(`[CORS] Từ chối origin: ${origin}`);
-    return false;
-  };
+    // Cấu hình CORS - đơn giản cho local development
+    app.enableCors({
+      origin: true, // Cho phép tất cả origins cho local development
+      methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+      credentials: true,
+      allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
+      exposedHeaders: ['Content-Type', 'Authorization'],
+    });
   
-  app.enableCors({
-    origin: originChecker,
-    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
-    credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
-    exposedHeaders: ['Content-Type', 'Authorization'],
-    preflightContinue: false,
-    optionsSuccessStatus: 204,
+  console.log('[Bootstrap] CORS đã được cấu hình');
+
+  // Middleware để log requests - đơn giản cho local development
+  app.use((req: any, res: any, next: any) => {
+    console.log(`[HTTP] ${req.method} ${req.url}`);
+    next();
   });
 
   app.useGlobalFilters(new AllExceptionsFilter());
 
-  const config = new DocumentBuilder()
-    .setTitle('KFC SCM API')
-    .setDescription('The KFC Supply Chain Management API description')
-    .setVersion('1.0')
-    .addTag('scm')
-    .addBearerAuth()
-    .build();
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
+  // Setup Swagger
+  console.log('[Bootstrap] Đang setup Swagger...');
+  try {
+    const config = new DocumentBuilder()
+      .setTitle('KFC SCM API')
+      .setDescription('The KFC Supply Chain Management API description')
+      .setVersion('1.0')
+      .addTag('scm')
+      .addBearerAuth()
+      .addServer('http://localhost:3001', 'Local development')
+      .build();
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api/docs', app, document, {
+      swaggerOptions: {
+        persistAuthorization: true,
+      },
+      customSiteTitle: 'KFC SCM API Documentation',
+    });
+    console.log('[Bootstrap] Swagger đã được setup tại /api/docs');
+  } catch (swaggerError) {
+    console.error('[Bootstrap] Lỗi khi setup Swagger:', swaggerError);
+    // Tiếp tục chạy dù Swagger có lỗi
+  }
 
-  await app.listen(process.env.PORT ?? 3001);
+  const port = process.env.PORT ?? 3001;
+  console.log(`[Bootstrap] Đang lắng nghe trên port ${port}...`);
+  await app.listen(port);
+  console.log(`[Bootstrap] ✅ Backend đã sẵn sàng tại http://localhost:${port}`);
+  console.log(`[Bootstrap] ✅ Swagger docs tại http://localhost:${port}/api/docs`);
+  } catch (error) {
+    console.error('[Bootstrap] Lỗi khi khởi động backend:', error);
+    if (error instanceof Error) {
+      console.error('[Bootstrap] Error message:', error.message);
+      console.error('[Bootstrap] Error stack:', error.stack);
+    }
+    process.exit(1);
+  }
 }
 void bootstrap();

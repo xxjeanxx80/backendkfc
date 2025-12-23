@@ -85,9 +85,6 @@ export class PurchaseOrder {
   @Column({ type: 'datetime', nullable: true })
   actualDeliveryDate: Date;
 
-  @Column({ type: 'text', nullable: true })
-  supplierNotes: string;
-
   @CreateDateColumn()
   createdAt: Date;
 

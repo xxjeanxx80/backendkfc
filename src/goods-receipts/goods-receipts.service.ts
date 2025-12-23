@@ -47,9 +47,9 @@ export class GoodsReceiptsService {
         throw new BadRequestException('Purchase order not found');
       }
 
-      if (po.status !== POStatus.APPROVED && po.status !== POStatus.SENT && po.status !== POStatus.CONFIRMED) {
+      if (po.status !== POStatus.SENT) {
         throw new BadRequestException(
-          `Cannot create goods receipt. PO status must be APPROVED, SENT, or CONFIRMED, current status: ${po.status}`,
+          `Cannot create goods receipt. PO status must be SENT, current status: ${po.status}`,
         );
       }
 

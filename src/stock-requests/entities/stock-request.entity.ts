@@ -14,11 +14,7 @@ import { Store } from '../../stores/entities/store.entity';
 
 export enum StockRequestStatus {
   REQUESTED = 'requested',
-  PENDING_APPROVAL = 'pending_approval',
-  APPROVED = 'approved',
-  REJECTED = 'rejected',
   PO_GENERATED = 'po_generated',
-  FULFILLED = 'fulfilled',
   CANCELLED = 'cancelled',
 }
 
@@ -68,12 +64,6 @@ export class StockRequest {
 
   @Column({ type: 'int', nullable: true })
   requestedBy: number | null;
-
-  @Column({ type: 'int', nullable: true })
-  approvedBy: number | null;
-
-  @Column({ type: 'datetime', nullable: true })
-  approvedAt: Date | null;
 
   @Column({ type: 'int', nullable: true })
   poId: number | null;

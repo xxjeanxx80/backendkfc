@@ -47,9 +47,12 @@ export class GoodsReceiptsService {
         throw new BadRequestException('Purchase order not found');
       }
 
-      if (po.status !== POStatus.SENT) {
+      // Allow creating GRN for PO in SENT or CONFIRMED status
+      // SENT: PO has been sent to supplier but not yet received
+      // CONFIRMED: PO has been received by inventory staff, ready to create GRN
+      if (po.status !== POStatus.SENT && po.status !== POStatus.CONFIRMED) {
         throw new BadRequestException(
-          `Cannot create goods receipt. PO status must be SENT, current status: ${po.status}`,
+          `Cannot create goods receipt. PO status must be SENT or CONFIRMED, current status: ${po.status}`,
         );
       }
 
